@@ -1,0 +1,91 @@
+name: Build Psych Engine APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v2
+        with:
+          api-versions: '31'
+          build-tools-version: '31.0.0'
+          ndk-version: '21.4.7075529'
+
+      - name: Set up Haxe
+        uses: haxefoundation/haxe-action@v1
+        with:
+          haxe-version: 4.2.5
+
+      - name: Update Haxelib
+        run: haxelib update
+
+      - name: Install HaxeFlixel Dependencies
+        run: |
+          haxelib install flixel
+          haxelib install flixel-ui
+          haxelib install flixel-addons
+          haxelib install lime
+          haxelib install openfl
+          haxelib install hscript
+          haxelib install discord_rpc
+          haxelib install hxcpp
+          haxelib install format
+          haxelib install actuate
+
+      - name: Setup Android Tools for Lime
+        run: |
+          haxelib run lime setup android -y
+
+      - name: Install Project Dependencies
+        run: |
+          haxelib install
+
+      - name: Compile for Android
+        run: |
+          haxe compile.hxml --define android
+
+      - name: Build APK with Lime
+        run: |
+          haxelib run lime build android -D android
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        if: success()
+        with:
+          name: psych-engine-apk
+          path: 'export/android/bin/app/build/outputs/apk/**/*.apk'
+          retention-days: 30
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Psych Engine APK ${{ github.ref }}
+          draft: false
+          prerelease: false
